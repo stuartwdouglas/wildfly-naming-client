@@ -28,6 +28,7 @@ import java.util.ServiceLoader;
 import org.jboss.marshalling.Marshaller;
 import org.jboss.marshalling.Marshalling;
 import org.jboss.marshalling.MarshallingConfiguration;
+import org.jboss.marshalling.OutputStreamByteOutput;
 import org.jboss.marshalling.Unmarshaller;
 import org.jboss.remoting3.MessageInputStream;
 import org.jboss.remoting3.MessageOutputStream;
@@ -66,7 +67,14 @@ final class ProtocolUtils {
 
     public static Marshaller createMarshaller(MessageOutputStream os, MarshallingConfiguration configuration) throws IOException {
         final Marshaller marshaller = Marshalling.getProvidedMarshallerFactory("river").createMarshaller(configuration);
-        marshaller.start(Marshalling.createByteOutput(os));
+        marshaller.start(new OutputStreamByteOutput(os) {
+
+            @Override
+            public void flush() throws IOException {
+                //ignore flushes, all they do is wreck performance as you get a double flush when closing the marshaller
+                //which results in two network packets being sent
+            }
+        });
         return marshaller;
     }
 
