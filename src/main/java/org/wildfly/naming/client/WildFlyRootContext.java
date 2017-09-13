@@ -905,8 +905,17 @@ public final class WildFlyRootContext implements DirContext {
             }
             return uriList;
         }
-        // no EJB connection properties were specified; nothing left to try
-        return null;
+
+        List<URI> ret = new ArrayList<>();
+        try (final ServicesQueue queue = Discovery.getContextManager().get().discover(
+                EJB_SERVICE_TYPE, FilterSpec.all()
+        )) {
+            ret.add(queue.take());
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new IllegalStateException(e);
+        }
+        return ret.isEmpty() ? null : ret;
     }
 
     private String getStringProperty(final String propertyName, final FastHashtable<String, Object> env) {
