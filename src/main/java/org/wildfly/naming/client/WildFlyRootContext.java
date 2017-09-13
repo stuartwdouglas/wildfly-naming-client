@@ -53,6 +53,10 @@ import javax.naming.spi.NamingManager;
 
 import org.wildfly.common.Assert;
 import org.wildfly.common.expression.Expression;
+import org.wildfly.discovery.Discovery;
+import org.wildfly.discovery.FilterSpec;
+import org.wildfly.discovery.ServiceType;
+import org.wildfly.discovery.ServicesQueue;
 import org.wildfly.naming.client._private.Messages;
 import org.wildfly.naming.client.util.EnvironmentUtils;
 import org.wildfly.naming.client.util.FastHashtable;
@@ -67,6 +71,16 @@ import org.xnio.Options;
  * @author <a href="mailto:tadamski@redhat.com">Tomasz Adamski</a>
  */
 public final class WildFlyRootContext implements DirContext {
+
+    public static final ServiceType EJB_SERVICE_TYPE = ServiceType.of("ejb", "jboss");
+
+    /**
+     * The discovery attribute name which contains a cluster name.
+     */
+    public static final String FILTER_ATTR_CLUSTER = "cluster";
+
+    private static final String CLUSTER_AFFINITY = "cluster-affinity";
+
     static {
         Version.getVersion();
     }
@@ -815,6 +829,21 @@ public final class WildFlyRootContext implements DirContext {
      */
     private List<URI> getProviderUris() throws NamingException {
         final FastHashtable<String, Object> env = getEnvironment();
+        Object cluster = env.get(CLUSTER_AFFINITY);
+        if(cluster != null) {
+            List<URI> ret = new ArrayList<>();
+            try (final ServicesQueue queue = Discovery.getContextManager().get().discover(
+                    EJB_SERVICE_TYPE, FilterSpec.equal(FILTER_ATTR_CLUSTER, cluster.toString())
+            )) {
+                ret.add(queue.take());
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                throw new IllegalStateException(e);
+            }
+            return ret;
+        }
+
+
         Object urlString = env.get(Context.PROVIDER_URL);
         if (urlString != null) {
             String providerUrl = Expression.compile(urlString.toString(), Expression.Flag.LENIENT_SYNTAX).evaluateWithPropertiesAndEnvironment(false);
